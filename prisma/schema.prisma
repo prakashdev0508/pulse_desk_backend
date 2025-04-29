@@ -1,0 +1,178 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  address     String?
+  phone       String?
+  email       String?
+  users       User[]
+  projects    Project[]
+  tickets     Ticket[]
+  tasks       Task[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  organizationId String
+  password       String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  tasksAssigned  Task[]   @relation("TaskAssignedTo")
+  ticketsAssigned Ticket[] @relation("TicketAssignedTo")
+
+  userRoles UserRoles[]
+  refreshToken String? @unique
+
+  isActive      Boolean  @default(true)
+  lastLogin     DateTime?
+  is_Verified    Boolean  @default(false)
+  is_deleted     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model PricingPlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+
+  currency    String
+  billingCycle String
+  maxUsers    Int
+  maxProjects Int
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Roles {
+  id         String  @id @default(cuid())
+  organizationId String
+  role_name  String
+  role_slug  UserRoleSlug? @unique
+  is_active  Boolean @default(true)
+  is_deleted Boolean @default(false)
+
+  users UserRoles[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserRoles {
+  userId String
+  roleId String
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Roles @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  tasks          Task[]
+  tickets        Ticket[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Task {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  status         TaskStatus @default(PENDING)
+  dueDate        DateTime?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id])
+  assignedToId   String?
+  assignedTo     User?     @relation("TaskAssignedTo", fields: [assignedToId], references: [id])
+  comments       TaskComment[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Ticket {
+  id             String   @id @default(cuid())
+  title          String
+  description    String?
+  priority       TicketPriority @default(MEDIUM)
+  status         TicketStatus @default(OPEN)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  projectId      String?
+  project        Project? @relation(fields: [projectId], references: [id])
+  assignedToId   String?
+  assignedTo     User?     @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
+  comments       TicketComment[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  content   String
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  content   String
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+enum UserRoleSlug {
+  account_owner
+  admin
+  user 
+  guest
+  super_admin
+  project_manager
+  developer
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
