@@ -1,19 +1,18 @@
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "@/config/db/dbconfig";
+import { prisma } from "../../../config/db/dbconfig";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { createError } from "@/utils/messageResponse";
-import {
-  organizationRegisterSchema,
-  userRegisterSchema,
-} from "@/schema/authschema";
+import { createError, createSuccess } from "../../../utils/messageResponse";
+
 import { z } from "zod";
+import { organizationRegisterSchema , userRegisterSchema } from "../../../schema/authschema";
+import { organisationSlugcheck } from "../../../services/organisation.service";
 
 /**
  * @desc    post organization registration
- * @route   GET /api/v1/auth/orgination/register
+ * @route   POST /api/v1/auth/orgination/register
  * @access  Public
- */
+*/
 
 export const organizationRegister = async (
   req: Request,
@@ -30,12 +29,10 @@ export const organizationRegister = async (
       email,
     } = organizationRegisterSchema.parse(req.body);
 
-    const existOrganisation = await prisma.organization.findUnique({
-      where: { slug },
-    });
+    const slugCheck = await organisationSlugcheck(slug);
 
-    if (existOrganisation) {
-      next(createError(400, "Organization slug already exists"));
+    if (!slugCheck) {
+      next(createError(400, "Organization slug already exists" ));
       return;
     }
 
@@ -89,7 +86,7 @@ export const organizationRegister = async (
         { id: user.id },
         process.env.REFRESH_TOKEN_SECRET as string,
         {
-          expiresIn: "10d",
+          expiresIn: "30d",
         }
       );
 
@@ -100,8 +97,29 @@ export const organizationRegister = async (
         where: { id: user.id },
         data: { refreshToken },
       });
+
+      const accessToken = jwt.sign(
+        { id: user.id },
+        process.env.ACCESS_TOKEN_SECRET as string,
+        {
+          expiresIn: "7d",
+        }
+      );
+
+      createSuccess(
+        res,
+        "Organisation Created Successfully",
+        {
+          accessToken,
+          refreshToken,
+          id: organization.id,
+          userId: user.id,
+        },
+        201
+      );
     });
-  } catch (error) {
+  } catch (error : any) {
+    console.log("Error" , error?.message);
     if (error instanceof z.ZodError) {
       next(createError(403, "Validation error", error));
     } else {
@@ -112,7 +130,7 @@ export const organizationRegister = async (
 
 /**
  * @desc    post user registration
- * @route   GET /api/v1/auth/register/account-owner
+ * @route   POST /api/v1/auth/register/account-owner
  * @access  Private
  */
 export const userRegister = async (

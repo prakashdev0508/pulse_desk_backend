@@ -3,10 +3,11 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import { config } from "dotenv";
+import authRoute from "../src/modules/auth/routes/auth.routes"
 
 config();
 
-export const app = express();
+export const app = express(); 
 
 app.use(cors());
 app.use(helmet());
@@ -23,6 +24,8 @@ app.get("/health", (req, res) => {
 
 
 // TODO: Attach routes
+app.use("/api/v1/auth", authRoute);
+
 
 //ERROR HANDLER
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
