@@ -1,30 +1,20 @@
 import { Response } from "express";
 import { z } from "zod";
-
-class CustomError extends Error {
-  status: number;
-  error: any;
-
-  constructor(status: number,  error?: any) {
-    super(status.toString());
-    this.status = status;
-    this.message = error;
-    Object.setPrototypeOf(this, CustomError.prototype);
-  }
-}
+import { AppError, ValidationError } from "./errors";
 
 export const createError = (status: number, message: string, error?: any) => {
   if (error instanceof z.ZodError) {
-    const errorMessages = error.errors.map((err) => {
-      return {
-        field: err.path[0],
-        message: err.message,
-      };
-    });
-    return new CustomError(status, errorMessages);
+    const formattedErrors = error.errors.map((err) => ({
+      field: err.path[0],
+      message: err.message,
+    }));
+    return new ValidationError(JSON.stringify({
+      message: "Validation Error",
+      error: formattedErrors
+    }));
   }
 
-  return new CustomError(status, message);
+  return new AppError(status, message);
 };
 
 export const createSuccess = (

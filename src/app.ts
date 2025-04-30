@@ -1,40 +1,71 @@
-import express, { Request, Response, NextFunction } from "express";
-import cors from "cors";
-import helmet from "helmet";
-import morgan from "morgan";
-import { config } from "dotenv";
-import authRoute from "../src/modules/auth/routes/auth.routes"
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
+import { config } from 'dotenv';
+import { validateEnv } from './config/validateEnv';
+import { errorHandler } from './middleware/errorHandler';
+import { logger, stream } from './config/logger';
+import authRoute from './modules/auth/routes/auth.routes';
+import healthRoutes from './routes/health.routes';
 
+// Load environment variables
 config();
 
-export const app = express(); 
+// Validate environment variables
+validateEnv();
 
-app.use(cors());
-app.use(helmet());
-app.use(morgan("dev"));
+export const app = express();
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.CORS_ORIGIN,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+  message: 'Too many requests from this IP, please try again later.',
+});
+app.use(limiter);
+
+// Performance middleware
+app.use(compression());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check route
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    message: "Server is healthy! ✅",
-  });
-});
+// Logging
+app.use(morgan('combined', { stream }));
 
+// Routes
+app.use('/api/v1/auth', authRoute);
+app.use('/api/v1', healthRoutes);
 
-// TODO: Attach routes
-app.use("/api/v1/auth", authRoute);
+// Error handling
+app.use(errorHandler);
 
-
-//ERROR HANDLER
-app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
-  const errorMessage = error.message || "Something went wrong";
-  const errorStatus = (error as any).status || 500;
-
-  res.status(errorStatus).json({
-    success: false,
-    status: errorStatus,
-    message: errorMessage,
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    status: 'error',
+    message: 'Route not found',
   });
 });

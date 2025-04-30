@@ -3,10 +3,10 @@ import { prisma } from "../../../config/db/dbconfig";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createError, createSuccess } from "../../../utils/messageResponse";
-
 import { z } from "zod";
-import { organizationRegisterSchema , userRegisterSchema } from "../../../schema/authschema";
+import { organizationRegisterSchema, userRegisterSchema } from "../../../schema/authschema";
 import { organisationSlugcheck } from "../../../services/organisation.service";
+import { logger } from "../../../config/logger";
 
 /**
  * @desc    post organization registration
@@ -32,7 +32,7 @@ export const organizationRegister = async (
     const slugCheck = await organisationSlugcheck(slug);
 
     if (!slugCheck) {
-      next(createError(400, "Organization slug already exists" ));
+      next(createError(400, "Organization slug already exists"));
       return;
     }
 
@@ -77,6 +77,7 @@ export const organizationRegister = async (
           },
         },
       });
+
       if (!user) {
         next(createError(400, "User creation failed"));
         return;
@@ -84,26 +85,25 @@ export const organizationRegister = async (
 
       const refreshToken = jwt.sign(
         { id: user.id },
-        process.env.REFRESH_TOKEN_SECRET as string,
+        process.env.JWT_REFRESH_SECRET as string,
         {
-          expiresIn: "30d",
-        }
+          expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+        } as jwt.SignOptions
       );
 
       const encryptedRefreshToken = await bcrypt.hash(refreshToken, 10);
 
-      user.refreshToken = encryptedRefreshToken;
       await prisma.user.update({
         where: { id: user.id },
-        data: { refreshToken },
+        data: { refreshToken: encryptedRefreshToken },
       });
 
       const accessToken = jwt.sign(
         { id: user.id },
-        process.env.ACCESS_TOKEN_SECRET as string,
+        process.env.JWT_SECRET as string,
         {
-          expiresIn: "7d",
-        }
+          expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+        } as jwt.SignOptions
       );
 
       createSuccess(
@@ -118,12 +118,12 @@ export const organizationRegister = async (
         201
       );
     });
-  } catch (error : any) {
-    console.log("Error" , error?.message);
+  } catch (error) {
+    logger.error('Organization registration error:', error);
     if (error instanceof z.ZodError) {
-      next(createError(403, "Validation error", error));
+      next(createError(400, "Validation error", error));
     } else {
-      next(createError(500, "Internal server error", error));
+      next(createError(500, "Internal server error"));
     }
   }
 };
@@ -144,7 +144,6 @@ export const userRegister = async (
     );
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Check if the user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -154,10 +153,11 @@ export const userRegister = async (
       return;
     }
   } catch (error) {
+    logger.error('User registration error:', error);
     if (error instanceof z.ZodError) {
-      next(createError(403, "Validation error", error));
+      next(createError(400, "Validation error", error));
     } else {
-      next(createError(500, "Internal server error", error));
+      next(createError(500, "Internal server error"));
     }
   }
 };
