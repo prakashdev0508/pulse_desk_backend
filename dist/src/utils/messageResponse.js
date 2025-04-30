@@ -2,25 +2,19 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createSuccess = exports.createError = void 0;
 const zod_1 = require("zod");
-class CustomError extends Error {
-    constructor(status, message, error) {
-        super(message);
-        this.status = status;
-        this.error = error;
-        Object.setPrototypeOf(this, CustomError.prototype);
-    }
-}
+const errors_1 = require("./errors");
 const createError = (status, message, error) => {
     if (error instanceof zod_1.z.ZodError) {
-        const errorMessages = error.errors.map((err) => {
-            return {
-                field: err.path[0],
-                message: err.message,
-            };
-        });
-        return new CustomError(status, message, errorMessages);
+        const formattedErrors = error.errors.map((err) => ({
+            field: err.path[0],
+            message: err.message,
+        }));
+        return new errors_1.ValidationError(JSON.stringify({
+            message: "Validation Error",
+            error: formattedErrors
+        }));
     }
-    return new CustomError(status, message, error);
+    return new errors_1.AppError(status, message);
 };
 exports.createError = createError;
 const createSuccess = (res, message, data, status) => {
