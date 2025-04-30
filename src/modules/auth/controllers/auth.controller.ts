@@ -1,18 +1,23 @@
-import { Request, Response, NextFunction } from "express";
-import { prisma } from "../../../config/db/dbconfig";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-import { createError, createSuccess } from "../../../utils/messageResponse";
-import { z } from "zod";
-import { organizationRegisterSchema, userRegisterSchema } from "../../../schema/authschema";
-import { organisationSlugcheck } from "../../../services/organisation.service";
-import { logger } from "../../../config/logger";
+import { Request, Response, NextFunction } from 'express';
+import { prisma } from '../../../config/db/dbconfig';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { createError, createSuccess } from '../../../utils/messageResponse';
+import { z } from 'zod';
+import {
+  organizationRegisterSchema,
+  userRegisterSchema,
+  userLoginSchema,
+} from '../../../schema/authschema';
+import { organisationSlugcheck } from '../../../services/organisation.service';
+import { logger } from '../../../config/logger';
+import { generateTokens, saveRefreshToken } from '../../../services/token.service';
 
 /**
  * @desc    post organization registration
  * @route   POST /api/v1/auth/orgination/register
  * @access  Public
-*/
+ */
 
 export const organizationRegister = async (
   req: Request,
@@ -20,19 +25,13 @@ export const organizationRegister = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const {
-      organizationName,
-      organisationAddress,
-      password,
-      slug,
-      phoneNumber,
-      email,
-    } = organizationRegisterSchema.parse(req.body);
+    const { organizationName, organisationAddress, password, slug, phoneNumber, email } =
+      organizationRegisterSchema.parse(req.body);
 
     const slugCheck = await organisationSlugcheck(slug);
 
     if (!slugCheck) {
-      next(createError(400, "Organization slug already exists"));
+      next(createError(400, 'Organization slug already exists'));
       return;
     }
 
@@ -41,7 +40,7 @@ export const organizationRegister = async (
     });
 
     if (existEmail) {
-      next(createError(400, "Email already exists"));
+      next(createError(400, 'Email already exists'));
       return;
     }
 
@@ -60,7 +59,7 @@ export const organizationRegister = async (
 
       const accountRole = await prisma.roles.findUnique({
         where: {
-          role_slug: "account_owner",
+          role_slug: 'account_owner',
         },
       });
 
@@ -79,7 +78,7 @@ export const organizationRegister = async (
       });
 
       if (!user) {
-        next(createError(400, "User creation failed"));
+        next(createError(400, 'User creation failed'));
         return;
       }
 
@@ -87,7 +86,7 @@ export const organizationRegister = async (
         { id: user.id },
         process.env.JWT_REFRESH_SECRET as string,
         {
-          expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+          expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
         } as jwt.SignOptions
       );
 
@@ -102,13 +101,13 @@ export const organizationRegister = async (
         { id: user.id },
         process.env.JWT_SECRET as string,
         {
-          expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+          expiresIn: process.env.JWT_EXPIRES_IN || '1h',
         } as jwt.SignOptions
       );
 
       createSuccess(
         res,
-        "Organisation Created Successfully",
+        'Organisation Created Successfully',
         {
           accessToken,
           refreshToken,
@@ -121,16 +120,16 @@ export const organizationRegister = async (
   } catch (error) {
     logger.error('Organization registration error:', error);
     if (error instanceof z.ZodError) {
-      next(createError(400, "Validation error", error));
+      next(createError(400, 'Validation error', error));
     } else {
-      next(createError(500, "Internal server error"));
+      next(createError(500, 'Internal server error'));
     }
   }
 };
 
 /**
  * @desc    post user registration
- * @route   POST /api/v1/auth/register/account-owner
+ * @route   POST /api/v1/auth/user/register
  * @access  Private
  */
 export const userRegister = async (
@@ -139,9 +138,7 @@ export const userRegister = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { name, email, password, organizationId } = userRegisterSchema.parse(
-      req.body
-    );
+    const { name, email, password, organizationId } = userRegisterSchema.parse(req.body);
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const existingUser = await prisma.user.findUnique({
@@ -149,15 +146,110 @@ export const userRegister = async (
     });
 
     if (existingUser) {
-      next(createError(400, "User already exists"));
+      next(createError(400, 'User already exists'));
       return;
     }
   } catch (error) {
     logger.error('User registration error:', error);
     if (error instanceof z.ZodError) {
-      next(createError(400, "Validation error", error));
+      next(createError(400, 'Validation error', error));
     } else {
-      next(createError(500, "Internal server error"));
+      next(createError(500, 'Internal server error'));
     }
+  }
+};
+
+/**
+ * @desc    post user login
+ * @route   POST /api/v1/auth/user/login
+ * @access  Public
+ */
+
+export const userLogin = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, password } = userLoginSchema.parse(req.body);
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        password: true,
+        userRoles: {
+          select: {
+            role: {
+              select: {
+                role_slug: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      next(createError(400, 'User not found'));
+      return;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      next(createError(400, 'Invalid password'));
+      return;
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user.id);
+
+    await saveRefreshToken(user.id, refreshToken);
+
+    const userData = {
+      id: user.id,
+      roles: user.userRoles.map((role) => role.role.role_slug),
+    };
+
+    createSuccess(
+      res,
+      'User logged in successfully',
+      {
+        user : userData,
+        accessToken,
+        refreshToken,
+      },
+      200
+    );
+  } catch (error) {
+    logger.error('User login error:', error);
+    if (error instanceof z.ZodError) {
+      next(createError(400, 'Validation error', error));
+    } else {
+      next(createError(500, 'Internal server error'));
+    }
+  }
+};
+
+
+export const me = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = res.locals.userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        organizationId: true,
+        userRoles: {
+          select: {
+            role: {
+              select: { role_slug: true },
+            },
+          },
+        },
+      },
+    });
+
+    createSuccess(res, 'User details', user, 200);
+  } catch (error) {
+    next(createError(500, 'Internal server error'));
   }
 };

@@ -1,9 +1,8 @@
-import expres from "express";
-import jwt, { JwtPayload } from "jsonwebtoken";
+
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "@/config/db/dbconfig";
-import { createError } from "@/utils/messageResponse";
-import bcrypt from "bcryptjs";
+import { prisma } from "../config/db/dbconfig";
+import { createError } from "../utils/messageResponse";
+import { generateTokens, removeRefreshToken, saveRefreshToken, verifyAccessToken, verifyRefreshToken } from '../services/token.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
@@ -13,37 +12,32 @@ export const verifyToken = async (
   next: NextFunction
 ) => {
   try {
-    const token = req.headers.authorization;
-
-    if (!token) {
-      return createError(401, "You are not authenticated!");
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next(createError(401, 'No token provided'));
     }
 
-    const decodedToken = jwt.verify(token, JWT_SECRET) as JwtPayload;
-
-    if (!decodedToken) {
-      return createError(401, "Invalid token please login again!");
-    }
-
-    const userId = decodedToken.id;
+    const token = authHeader.split(' ')[1];
+    const decoded = verifyAccessToken(token) as { id: string };
 
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: decoded.id },
     });
+
     if (!user) {
-      return createError(401, "User not found!");
+      return next(createError(401, 'User not found'));
     }
 
     if (!user.isActive) {
-      return createError(401, "User is not active!");
+      return next(createError(401, 'User is not active'));
     }
 
     if (user.is_deleted) {
-      return createError(401, "User is deleted!");
+      return next(createError(401, 'User is deleted'));
     }
 
     if (!user.is_Verified) {
-      return createError(401, "User is not verified please verify!");
+      return next(createError(401, 'User is not verified'));
     }
 
     const roleSlugs = await prisma.userRoles.findMany({
@@ -56,9 +50,12 @@ export const verifyToken = async (
     res.locals.roles = roleSlugs;
     res.locals.organizationId = user.organizationId;
     res.locals.userName = user.name;
-  } catch (error) {
-    console.error("Error verifying token:", error);
-    return createError(401, "Token verification failed!");
+    next();
+  } catch (error:any) {
+    if (error.name === 'TokenExpiredError') {
+      return next(createError(401, 'Token expired'));
+    }
+    return next(createError(401, 'Invalid token'));
   }
 };
 
@@ -68,7 +65,7 @@ export const verifyroles = (accessRole: string[]) => {
       const userRoles = res.locals.roles;
 
       if (!userRoles || userRoles.length === 0) {
-        return next(createError(403, "No roles found for user"));
+        return next(createError(403, 'No roles found for user'));
       }
 
       const hasAccess = userRoles.some((role: string) =>
@@ -76,15 +73,61 @@ export const verifyroles = (accessRole: string[]) => {
       );
 
       if (!hasAccess) {
-        return next(createError(403, "Unauthorized : Access forbidden "));
+        return next(createError(403, 'Unauthorized: Access forbidden'));
       }
 
       next();
     } catch (error) {
-      console.error("Role verification error:", error);
-      return next(createError(500, "Role verification error"));
+      console.error('Role verification error:', error);
+      return next(createError(500, 'Role verification error'));
     }
   };
+};
+
+export const refreshAccessToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return next(createError(401, 'Refresh token is required'));
+    }
+
+    const decoded = verifyRefreshToken(refreshToken) as { id: string };
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+    });
+
+    if (!user || user.refreshToken !== refreshToken) {
+      return next(createError(401, 'Invalid refresh token'));
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user.id);
+    await saveRefreshToken(user.id, newRefreshToken);
+
+    res.json({
+      accessToken,
+      refreshToken: newRefreshToken,
+    });
+  } catch (error) {
+    return next(createError(401, 'Invalid refresh token'));
+  }
+};
+
+export const logout = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = res.locals.userId;
+    await removeRefreshToken(userId);
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    return next(createError(500, 'Error during logout'));
+  }
 };
 
 export const companyPricingAndAcces = async (
