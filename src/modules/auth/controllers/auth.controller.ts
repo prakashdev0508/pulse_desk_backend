@@ -227,7 +227,11 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
-
+/**
+ * @desc    get user details
+ * @route   GET /api/v1/auth/user/me
+ * @access  Private
+ */
 export const me = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = res.locals.userId;

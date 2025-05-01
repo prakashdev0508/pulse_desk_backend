@@ -138,27 +138,165 @@ async function main() {
             assignedToId: managerUser.id,
         },
     });
+    // Create Ticket Categories
+    const bugCategory = await prisma.ticketCategories.create({
+        data: {
+            name: 'Bug Reports',
+            description: 'Issues and bugs in the system',
+            organizationId: organization.id,
+        },
+    });
+    const featureCategory = await prisma.ticketCategories.create({
+        data: {
+            name: 'Feature Requests',
+            description: 'New feature requests and enhancements',
+            organizationId: organization.id,
+        },
+    });
+    // Create Ticket Subcategories
+    const loginSubcategory = await prisma.ticketSubCategories.create({
+        data: {
+            name: 'Login Issues',
+            description: 'Problems related to user authentication',
+            organizationId: organization.id,
+            ticketCategoryId: bugCategory.id,
+        },
+    });
+    const uiSubcategory = await prisma.ticketSubCategories.create({
+        data: {
+            name: 'UI/UX',
+            description: 'User interface and experience improvements',
+            organizationId: organization.id,
+            ticketCategoryId: featureCategory.id,
+        },
+    });
+    // Create Ticket Groups
+    const supportGroup = await prisma.ticketGroup.create({
+        data: {
+            name: 'Support Team',
+            description: 'Main support team for customer issues',
+            organizationId: organization.id,
+            assignedUsers: {
+                connect: [
+                    { id: adminUser.id },
+                    { id: managerUser.id }
+                ],
+            },
+        },
+    });
+    const devGroup = await prisma.ticketGroup.create({
+        data: {
+            name: 'Development Team',
+            description: 'Technical team for bug fixes and features',
+            organizationId: organization.id,
+            assignedUsers: {
+                connect: [
+                    { id: normalUser.id }
+                ],
+            },
+        },
+    });
+    // Create Ticket Statuses
+    const openStatus = await prisma.ticketStatuses.create({
+        data: {
+            name: 'Open',
+            description: 'New ticket that needs attention',
+            organizationId: organization.id,
+        },
+    });
+    const inProgressStatus = await prisma.ticketStatuses.create({
+        data: {
+            name: 'In Progress',
+            description: 'Ticket is being worked on',
+            organizationId: organization.id,
+        },
+    });
+    // Create Ticket Customers
+    const customer1 = await prisma.ticketCustomer.create({
+        data: {
+            name: 'John Doe',
+            email: 'john.doe@example.com',
+            phone: '+1234567891',
+            organizationId: organization.id,
+        },
+    });
+    const customer2 = await prisma.ticketCustomer.create({
+        data: {
+            name: 'Jane Smith',
+            email: 'jane.smith@example.com',
+            phone: '+1234567892',
+            organizationId: organization.id,
+        },
+    });
+    // Create Escalation Rules
+    const highPriorityRule = await prisma.ticketEscalationRules.create({
+        data: {
+            name: 'High Priority Escalation',
+            description: 'Escalation rules for high priority tickets',
+            organizationId: organization.id,
+            categoryId: bugCategory.id,
+            priority: 'HIGH',
+            responseTime: 30, // 30 minutes
+            resolutionTime: 240, // 4 hours
+            escalationLevels: JSON.stringify([
+                { level: 1, time: 30, notify: 'support_team' },
+                { level: 2, time: 60, notify: 'management' },
+                { level: 3, time: 120, notify: 'executive' },
+            ]),
+        },
+    });
     // Create Tickets
     const ticket1 = await prisma.ticket.create({
         data: {
-            title: 'Bug: User not able to login',
-            description: 'User reports 500 error during login attempt',
+            title: 'Login Page Not Working',
+            description: 'Users unable to access the login page',
             priority: 'HIGH',
-            status: 'OPEN',
+            categoryId: bugCategory.id,
+            subCategoryId: loginSubcategory.id,
+            customerId: customer1.id,
+            statusID: openStatus.id,
             organizationId: organization.id,
-            projectId: project.id,
-            assignedToId: normalUser.id,
+            assignedgroupId: supportGroup.id,
+            escalationRuleId: highPriorityRule.id,
+            customFields: JSON.stringify({
+                browser: 'Chrome',
+                os: 'Windows 10',
+            }),
         },
     });
     const ticket2 = await prisma.ticket.create({
         data: {
-            title: 'Feature: Allow SSO login',
-            description: 'Request to add Google and Microsoft SSO',
+            title: 'Request Dark Mode',
+            description: 'Add dark mode theme to the application',
             priority: 'MEDIUM',
-            status: 'IN_PROGRESS',
+            categoryId: featureCategory.id,
+            subCategoryId: uiSubcategory.id,
+            customerId: customer2.id,
+            statusID: inProgressStatus.id,
             organizationId: organization.id,
-            projectId: project.id,
-            assignedToId: managerUser.id,
+            assignedgroupId: devGroup.id,
+        },
+    });
+    // Add Ticket Comments
+    await prisma.ticketComments.create({
+        data: {
+            ticketId: ticket1.id,
+            comment: 'Investigating the login issue. Will update soon.',
+        },
+    });
+    await prisma.ticketComments.create({
+        data: {
+            ticketId: ticket2.id,
+            comment: 'Dark mode design is in progress.',
+        },
+    });
+    // Create Ticket Escalations
+    await prisma.ticketEscalations.create({
+        data: {
+            ticketId: ticket1.id,
+            level: 1,
+            escalatedTo: supportGroup.id,
+            notes: 'Initial escalation to support team',
         },
     });
     // Add Comments on Tasks
@@ -172,19 +310,6 @@ async function main() {
         data: {
             content: 'Waiting for UI designs to be finalized.',
             taskId: task2.id,
-        },
-    });
-    // Add Comments on Tickets
-    await prisma.ticketComment.create({
-        data: {
-            content: 'Investigating the login issue.',
-            ticketId: ticket1.id,
-        },
-    });
-    await prisma.ticketComment.create({
-        data: {
-            content: 'SSO integration planned for next sprint.',
-            ticketId: ticket2.id,
         },
     });
     console.log('✅ Database seeded successfully!');

@@ -180,6 +180,11 @@ const userLogin = async (req, res, next) => {
     }
 };
 exports.userLogin = userLogin;
+/**
+ * @desc    get user details
+ * @route   GET /api/v1/auth/user/me
+ * @access  Private
+ */
 const me = async (req, res, next) => {
     try {
         const userId = res.locals.userId;
