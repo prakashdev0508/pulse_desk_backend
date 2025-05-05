@@ -10,25 +10,27 @@ datasource db {
 }
 
 model Organization {
-  id                   String                @id @default(cuid())
-  name                 String
-  slug                 String                @unique
-  address              String?
-  phone                String?
-  email                String?
-  users                User[]
-  projects             Project[]
-  tickets              Ticket[]
-  tasks                Task[]
-  ticketCustomers      TicketCustomer[]
-  ticketGroups         TicketGroup[]
-  ticketCategories     TicketCategories[]
-  ticketStatuses       TicketStatuses[]
-  ticketsSubCategories TicketSubCategories[]
-  ticketsAutomations   TicketsAutomations[]
+  id                    String                  @id @default(cuid())
+  name                  String
+  slug                  String                  @unique
+  address               String?
+  phone                 String?
+  email                 String?
+  users                 User[]
+  projects              Project[]
+  tickets               Ticket[]
+  tasks                 Task[]
+  ticketCustomers       TicketCustomer[]
+  ticketGroups          TicketGroup[]
+  ticketCategories      TicketCategories[]
+  ticketStatuses        TicketStatuses[]
+  ticketsSubCategories  TicketSubCategories[]
+  ticketsAutomations    TicketsAutomations[]
   ticketEscalationRules TicketEscalationRules[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  policies              Policy[]
+  roles                 Roles[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 }
 
 model User {
@@ -41,9 +43,14 @@ model User {
   tasksAssigned   Task[]        @relation("TaskAssignedTo")
   ticketsAssigned Ticket[]      @relation("UserAssignedTickets")
   ticketGroups    TicketGroup[] @relation("UserTicketGroups")
+  
+  // Many-to-many relationships
+  policies        UserPolicy[]  // Changed from direct relation to join table
+  roles           UserRoles[]   // Already correct
 
-  userRoles    UserRoles[]
-  refreshToken String?     @unique
+  userAccess TicketAccess? @default(NONE)
+
+  refreshToken String? @unique
 
   isActive    Boolean   @default(true)
   lastLogin   DateTime?
@@ -51,6 +58,101 @@ model User {
   is_deleted  Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model Policy {
+  id             String @id @default(cuid())
+  organizationId String
+  policyName     String
+  description    String?
+  
+  // Relationships with organization and users/roles
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  users         UserPolicy[]
+  roles         RolePolicy[]
+  
+  // Policy components relationships
+  resources     PolicyResource[]    @relation("policy_resources")
+  conditions    PolicyCondition[]   @relation("policy_conditions")
+  permissions   PolicyPermission[]  @relation("policy_permissions")
+  
+  // Metadata
+  policyType    PolicyType   @default(SYSTEM)
+  createdBy     String?
+  isActive      Boolean      @default(true)
+  isDeleted     Boolean      @default(false)
+  
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("policies")
+}
+
+model PolicyResource {
+  id          String   @id @default(cuid())
+  policyId    String
+  resourceType String  // e.g., "ticket", "user", "organization"
+  actions     String[] // e.g., ["create", "read", "update", "delete"]
+  
+  // Relationship with policy
+  policy      Policy   @relation("policy_resources", fields: [policyId], references: [id], onDelete: Cascade)
+  
+  // Relationship with permissions
+  permissions PolicyPermission[] @relation("resource_permissions")
+  
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("policy_resources")
+}
+
+model PolicyCondition {
+  id          String   @id @default(cuid())
+  policyId    String
+  
+  // Condition details
+  field       String   // e.g., "organizationId", "status"
+  operator    ConditionOperator // Using enum for operators
+  value       String   // e.g., "${user.organizationId}", "active"
+  
+  // Relationship with policy
+  policy      Policy   @relation("policy_conditions", fields: [policyId], references: [id], onDelete: Cascade)
+  
+  // Relationship with permissions (conditions can be specific to certain permissions)
+  permissions PolicyPermission[] @relation("condition_permissions")
+  
+  // Metadata
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("policy_conditions")
+}
+
+model PolicyPermission {
+  id          String   @id @default(cuid())
+  policyId    String
+  resourceId  String
+  
+  // Permission details
+  action      PolicyAction
+  effect      PolicyEffect @default(ALLOW)
+  priority    Int         @default(0) // Higher priority overrides lower
+  
+  // Relationships
+  policy      Policy     @relation("policy_permissions", fields: [policyId], references: [id], onDelete: Cascade)
+  resource    PolicyResource @relation("resource_permissions", fields: [resourceId], references: [id], onDelete: Cascade)
+  conditions  PolicyCondition[] @relation("condition_permissions")
+  
+  // Metadata
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("policy_permissions")
+  @@index([policyId, resourceId])
 }
 
 model TicketCustomer {
@@ -66,65 +168,65 @@ model TicketCustomer {
 }
 
 model Ticket {
-  id             String          @id @default(cuid())
-  title          String
-  description    String?
-  priority       TicketPriority  @default(MEDIUM)
-  responseTime   DateTime?
-  resolutionTime DateTime?
-  categoryId     String
-  category       TicketCategories @relation(fields: [categoryId], references: [id])
-  subCategoryId  String?
-  subCategory    TicketSubCategories? @relation(fields: [subCategoryId], references: [id])
-  customerId     String
-  customer       TicketCustomer @relation(fields: [customerId], references: [id])
-  statusID       String
-  status         TicketStatuses  @relation(fields: [statusID], references: [id])
-  organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id])
-  customFields   Json?
-  automationRuleId   String?
-  automationRule     TicketsAutomations? @relation(fields: [automationRuleId], references: [id])
-  escalationRuleId   String?
-  escalationRule     TicketEscalationRules? @relation(fields: [escalationRuleId], references: [id])
-  assignedgroupId   String?
-  assignedGroup     TicketGroup? @relation("TicketAssignedTo", fields: [assignedgroupId], references: [id])
-  assignedToId      String?
-  assignedTo        User?        @relation("UserAssignedTickets", fields: [assignedToId], references: [id])
-  comments       TicketComments[]
-  attachments    TicketAttachments[]
-  escalations    TicketEscalations[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               String                 @id @default(cuid())
+  title            String
+  description      String?
+  priority         TicketPriority         @default(MEDIUM)
+  responseTime     DateTime?
+  resolutionTime   DateTime?
+  categoryId       String
+  category         TicketCategories       @relation(fields: [categoryId], references: [id])
+  subCategoryId    String?
+  subCategory      TicketSubCategories?   @relation(fields: [subCategoryId], references: [id])
+  customerId       String
+  customer         TicketCustomer         @relation(fields: [customerId], references: [id])
+  statusID         String
+  status           TicketStatuses         @relation(fields: [statusID], references: [id])
+  organizationId   String
+  organization     Organization           @relation(fields: [organizationId], references: [id])
+  customFields     Json?
+  automationRuleId String?
+  automationRule   TicketsAutomations?    @relation(fields: [automationRuleId], references: [id])
+  escalationRuleId String?
+  escalationRule   TicketEscalationRules? @relation(fields: [escalationRuleId], references: [id])
+  assignedgroupId  String?
+  assignedGroup    TicketGroup?           @relation("TicketAssignedTo", fields: [assignedgroupId], references: [id])
+  assignedToId     String?
+  assignedTo       User?                  @relation("UserAssignedTickets", fields: [assignedToId], references: [id])
+  comments         TicketComments[]
+  attachments      TicketAttachments[]
+  escalations      TicketEscalations[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 }
 
 model TicketAttachments {
-  id String @id @default(cuid())
-  ticketId String
-  ticket Ticket @relation(fields: [ticketId], references: [id])
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model TicketComments {
-  id String @id @default(cuid())
-  ticketId String
-  ticket Ticket @relation(fields: [ticketId], references: [id])
-  comment String
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  comment   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model TicketGroup {
-  id             String       @id @default(cuid())
-  name           String
-  description    String?
-  organizationId String
-  assignedUsers  User[]       @relation("UserTicketGroups")
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  assignedTickets Ticket[]    @relation("TicketAssignedTo")
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id              String       @id @default(cuid())
+  name            String
+  description     String?
+  organizationId  String
+  assignedUsers   User[]       @relation("UserTicketGroups")
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  assignedTickets Ticket[]     @relation("TicketAssignedTo")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
 model TicketsAutomations {
@@ -134,21 +236,21 @@ model TicketsAutomations {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   tickets        Ticket[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model TicketCategories {
-  id                  String                @id @default(cuid())
+  id                  String                  @id @default(cuid())
   name                String
   description         String?
   organizationId      String
-  organization        Organization          @relation(fields: [organizationId], references: [id])
+  organization        Organization            @relation(fields: [organizationId], references: [id])
   ticketSubCategories TicketSubCategories[]
   tickets             Ticket[]
   escalationRules     TicketEscalationRules[]
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 }
 
 model TicketSubCategories {
@@ -194,15 +296,21 @@ model PricingPlan {
 model Roles {
   id             String        @id @default(cuid())
   organizationId String
-  role_name      String
-  role_slug      UserRoleSlug? @unique
-  is_active      Boolean       @default(true)
-  is_deleted     Boolean       @default(false)
+  roleName       String
+  roleSlug       UserRoleSlug? @unique
+  description    String?
+  
+  // Relationships
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  users         UserRoles[]  // Already correct
+  policies      RolePolicy[] // Changed from direct relation to join table
+  
+  isActive      Boolean      @default(true)
+  isDeleted     Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  users UserRoles[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@map("roles")
 }
 
 model UserRoles {
@@ -252,36 +360,37 @@ model TaskComment {
 }
 
 model TicketEscalationRules {
-  id             String       @id @default(cuid())
-  name           String
-  description    String?
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  categoryId     String
-  category       TicketCategories @relation(fields: [categoryId], references: [id])
-  priority       TicketPriority
-  responseTime   Int          // in minutes
-  resolutionTime Int          // in minutes
-  escalationLevels Json      // Array of escalation levels with time thresholds
-  tickets        Ticket[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id               String           @id @default(cuid())
+  name             String
+  description      String?
+  organizationId   String
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  categoryId       String
+  category         TicketCategories @relation(fields: [categoryId], references: [id])
+  priority         TicketPriority
+  responseTime     Int // in minutes
+  resolutionTime   Int // in minutes
+  escalationLevels Json 
+  tickets          Ticket[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }
 
 model TicketEscalations {
-  id             String       @id @default(cuid())
-  ticketId       String
-  ticket         Ticket       @relation(fields: [ticketId], references: [id])
-  level          Int
-  escalatedTo    String       // User or group ID
-  escalatedAt    DateTime     @default(now())
-  resolvedAt     DateTime?
-  notes          String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id          String    @id @default(cuid())
+  ticketId    String
+  ticket      Ticket    @relation(fields: [ticketId], references: [id])
+  level       Int
+  escalatedTo String // User or group ID
+  escalatedAt DateTime  @default(now())
+  resolvedAt  DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 enum UserRoleSlug {
+  web_super_admin
   account_owner
   admin
   user
@@ -289,6 +398,11 @@ enum UserRoleSlug {
   super_admin
   project_manager
   developer
+}
+
+enum PolicyType {
+  SYSTEM
+  CUSTOM
 }
 
 enum TaskStatus {
@@ -310,4 +424,63 @@ enum TicketStatus {
   IN_PROGRESS
   RESOLVED
   CLOSED
+}
+
+enum TicketAccess {
+  NONE
+  GlOBAL
+  GROUPS
+  ASSIGNED
+}
+
+enum PolicyAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+}
+
+// New join tables for many-to-many relationships
+model UserPolicy {
+  userId    String
+  policyId  String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  policy    Policy  @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, policyId])
+  @@map("user_policies")
+}
+
+model RolePolicy {
+  roleId    String
+  policyId  String
+  role      Roles   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  policy    Policy  @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([roleId, policyId])
+  @@map("role_policies")
+}
+
+enum ConditionOperator {
+  EQUALS
+  NOT_EQUALS
+  CONTAINS
+  NOT_CONTAINS
+  IN
+  NOT_IN
+  GREATER_THAN
+  GREATER_THAN_OR_EQUALS
+  LESS_THAN
+  LESS_THAN_OR_EQUALS
+  STARTS_WITH
+  ENDS_WITH
+}
+
+enum PolicyEffect {
+  ALLOW
+  DENY
 }

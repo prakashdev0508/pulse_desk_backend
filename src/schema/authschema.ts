@@ -32,3 +32,12 @@ export const userLoginSchema = z.object({
     .min(6, { message: "Password must be at least 6 characters long" }),
 });
 
+export const policyPermissionSchema = z.object({
+  permission: z.string().min(1, { message: "Permission is required" }),
+});
+
+export const policyRegisterSchema = z.object({
+  name: z.string().min(1, { message: "Name is required" }),
+  policyType: z.enum(["SYSTEM", "CUSTOM"]).optional(),
+  permissions: z.array(policyPermissionSchema).optional(),
+});
