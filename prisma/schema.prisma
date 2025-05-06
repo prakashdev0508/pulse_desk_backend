@@ -28,7 +28,6 @@ model Organization {
   ticketsAutomations    TicketsAutomations[]
   ticketEscalationRules TicketEscalationRules[]
   policies              Policy[]
-  roles                 Roles[]
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
 }
@@ -46,7 +45,6 @@ model User {
   
   // Many-to-many relationships
   policies        UserPolicy[]  // Changed from direct relation to join table
-  roles           UserRoles[]   // Already correct
 
   userAccess TicketAccess? @default(NONE)
 
@@ -69,15 +67,12 @@ model Policy {
   // Relationships with organization and users/roles
   organization   Organization @relation(fields: [organizationId], references: [id])
   users         UserPolicy[]
-  roles         RolePolicy[]
   
   // Policy components relationships
-  resources     PolicyResource[]    @relation("policy_resources")
-  conditions    PolicyCondition[]   @relation("policy_conditions")
-  permissions   PolicyPermission[]  @relation("policy_permissions")
+  permissions   PolicyPermissionPolicy[]  @relation("policy_permissions")
+  policyType    PolicyType   @default(SYSTEM)
   
   // Metadata
-  policyType    PolicyType   @default(SYSTEM)
   createdBy     String?
   isActive      Boolean      @default(true)
   isDeleted     Boolean      @default(false)
@@ -88,63 +83,18 @@ model Policy {
   @@map("policies")
 }
 
-model PolicyResource {
-  id          String   @id @default(cuid())
-  policyId    String
-  resourceType String  // e.g., "ticket", "user", "organization"
-  actions     String[] // e.g., ["create", "read", "update", "delete"]
-  
-  // Relationship with policy
-  policy      Policy   @relation("policy_resources", fields: [policyId], references: [id], onDelete: Cascade)
-  
-  // Relationship with permissions
-  permissions PolicyPermission[] @relation("resource_permissions")
-  
-  // Metadata
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("policy_resources")
-}
-
-model PolicyCondition {
-  id          String   @id @default(cuid())
-  policyId    String
-  
-  // Condition details
-  field       String   // e.g., "organizationId", "status"
-  operator    ConditionOperator // Using enum for operators
-  value       String   // e.g., "${user.organizationId}", "active"
-  
-  // Relationship with policy
-  policy      Policy   @relation("policy_conditions", fields: [policyId], references: [id], onDelete: Cascade)
-  
-  // Relationship with permissions (conditions can be specific to certain permissions)
-  permissions PolicyPermission[] @relation("condition_permissions")
-  
-  // Metadata
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("policy_conditions")
-}
-
 model PolicyPermission {
   id          String   @id @default(cuid())
-  policyId    String
-  resourceId  String
-  
+  permissionName String
+  policyType  PolicyPermissionType @default(INTERNAL)
+  key         PolicyPermissionKeys 
+  description String?
   // Permission details
-  action      PolicyAction
+  action      PolicyAction[]
   effect      PolicyEffect @default(ALLOW)
-  priority    Int         @default(0) // Higher priority overrides lower
   
   // Relationships
-  policy      Policy     @relation("policy_permissions", fields: [policyId], references: [id], onDelete: Cascade)
-  resource    PolicyResource @relation("resource_permissions", fields: [resourceId], references: [id], onDelete: Cascade)
-  conditions  PolicyCondition[] @relation("condition_permissions")
+  policies    PolicyPermissionPolicy[] @relation("permission_policies")
   
   // Metadata
   isActive    Boolean    @default(true)
@@ -152,7 +102,19 @@ model PolicyPermission {
   updatedAt   DateTime   @updatedAt
 
   @@map("policy_permissions")
-  @@index([policyId, resourceId])
+}
+
+// Join table for many-to-many relationship
+model PolicyPermissionPolicy {
+  policyId           String
+  policyPermissionId String
+  policy            Policy          @relation("policy_permissions", fields: [policyId], references: [id], onDelete: Cascade)
+  permission        PolicyPermission @relation("permission_policies", fields: [policyPermissionId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@id([policyId, policyPermissionId])
+  @@map("policy_permission_policies")
 }
 
 model TicketCustomer {
@@ -293,36 +255,6 @@ model PricingPlan {
   updatedAt DateTime @updatedAt
 }
 
-model Roles {
-  id             String        @id @default(cuid())
-  organizationId String
-  roleName       String
-  roleSlug       UserRoleSlug? @unique
-  description    String?
-  
-  // Relationships
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  users         UserRoles[]  // Already correct
-  policies      RolePolicy[] // Changed from direct relation to join table
-  
-  isActive      Boolean      @default(true)
-  isDeleted     Boolean      @default(false)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-
-  @@map("roles")
-}
-
-model UserRoles {
-  userId String
-  roleId String
-
-  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Roles @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@id([userId, roleId])
-}
-
 model Project {
   id             String       @id @default(cuid())
   name           String
@@ -393,7 +325,7 @@ enum UserRoleSlug {
   web_super_admin
   account_owner
   admin
-  user
+  user 
   guest
   super_admin
   project_manager
@@ -453,34 +385,37 @@ model UserPolicy {
   @@map("user_policies")
 }
 
-model RolePolicy {
-  roleId    String
-  policyId  String
-  role      Roles   @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  policy    Policy  @relation(fields: [policyId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@id([roleId, policyId])
-  @@map("role_policies")
-}
-
-enum ConditionOperator {
-  EQUALS
-  NOT_EQUALS
-  CONTAINS
-  NOT_CONTAINS
-  IN
-  NOT_IN
-  GREATER_THAN
-  GREATER_THAN_OR_EQUALS
-  LESS_THAN
-  LESS_THAN_OR_EQUALS
-  STARTS_WITH
-  ENDS_WITH
+enum PolicyPermissionType {
+  INTERNAL
+  EXTERNAL
 }
 
 enum PolicyEffect {
   ALLOW
   DENY
+}
+
+enum PolicyPermissionKeys {
+  all
+  ticket_create
+  ticket_read
+  ticket_update
+  ticket_delete
+  ticket_assign
+  ticket_comment
+  ticket_forms
+  ticket_fields
+  ticket_statuses
+  ticket_priorities
+  ticket_categories
+  ticket_sub_categories
+  ticket_close
+  ticket_reopen
+  ticket_assign_group
+  ticket_escalation
+  ticket_attachments
+  ticket_comments
+  reports
+  user_management
+  billings
 }

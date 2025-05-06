@@ -1,8 +1,14 @@
 
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "../config/db/dbconfig";
-import { createError } from "../utils/messageResponse";
-import { generateTokens, removeRefreshToken, saveRefreshToken, verifyAccessToken, verifyRefreshToken } from '../services/token.service';
+import { prisma } from '../../config/db/dbconfig';
+import { createError } from '../../utils/messageResponse';
+import {
+  generateTokens,
+  removeRefreshToken,
+  saveRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+} from '../../services/token.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
 
@@ -40,14 +46,8 @@ export const verifyToken = async (
       return next(createError(401, 'User is not verified'));
     }
 
-    const roleSlugs = await prisma.userRoles.findMany({
-      where: {
-        userId: user.id,
-      },
-    });
 
     res.locals.userId = user.id;
-    res.locals.roles = roleSlugs;
     res.locals.organizationId = user.organizationId;
     res.locals.userName = user.name;
     next();

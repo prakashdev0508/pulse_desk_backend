@@ -8,7 +8,7 @@ import {
   organizationRegisterSchema,
   userRegisterSchema,
   userLoginSchema,
-} from '../../../schema/authschema';
+} from '../../../schema/auth/authschema';
 import { organisationSlugcheck } from '../../../services/organisation.service';
 import { logger } from '../../../config/logger';
 import { generateTokens, saveRefreshToken } from '../../../services/token.service';
@@ -57,23 +57,13 @@ export const organizationRegister = async (
         },
       });
 
-      const accountRole = await prisma.roles.findUnique({
-        where: {
-          role_slug: 'account_owner',
-        },
-      });
 
       const user = await prisma.user.create({
         data: {
           name: organizationName,
           email,
           password: hashedPassword,
-          organizationId: organization.id,
-          userRoles: {
-            create: {
-              roleId: accountRole?.id as string,
-            },
-          },
+          organizationId: organization.id
         },
       });
 
@@ -174,15 +164,6 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
       select: {
         id: true,
         password: true,
-        userRoles: {
-          select: {
-            role: {
-              select: {
-                role_slug: true,
-              },
-            },
-          },
-        },
       },
     });
 
@@ -204,7 +185,6 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
 
     const userData = {
       id: user.id,
-      roles: user.userRoles.map((role) => role.role.role_slug),
     };
 
     createSuccess(
@@ -242,13 +222,6 @@ export const me = async (req: Request, res: Response, next: NextFunction) => {
         name: true,
         email: true,
         organizationId: true,
-        userRoles: {
-          select: {
-            role: {
-              select: { role_slug: true },
-            },
-          },
-        },
       },
     });
 

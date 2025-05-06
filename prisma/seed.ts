@@ -1,9 +1,33 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, PolicyAction, PolicyEffect, PolicyPermissionType, PolicyType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding database...');
+
+  // Clean up existing data
+  console.log('🧹 Cleaning up existing data...');
+  await prisma.ticketEscalations.deleteMany();
+  await prisma.ticketComments.deleteMany();
+  await prisma.ticketAttachments.deleteMany();
+  await prisma.ticket.deleteMany();
+  await prisma.ticketEscalationRules.deleteMany();
+  await prisma.ticketSubCategories.deleteMany();
+  await prisma.ticketCategories.deleteMany();
+  await prisma.ticketStatuses.deleteMany();
+  await prisma.ticketGroup.deleteMany();
+  await prisma.ticketCustomer.deleteMany();
+  await prisma.taskComment.deleteMany();
+  await prisma.task.deleteMany();
+  await prisma.project.deleteMany();
+  await prisma.userPolicy.deleteMany();
+  await prisma.policyPermissionPolicy.deleteMany();
+  await prisma.policyPermission.deleteMany();
+  await prisma.policy.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.organization.deleteMany();
+  await prisma.pricingPlan.deleteMany();
+  console.log('✨ Cleanup completed');
 
   // Create Organizations
   const organization = await prisma.organization.create({
@@ -16,40 +40,80 @@ async function main() {
     },
   });
 
-  // Create Roles
-  const accountOwnerRole = await prisma.roles.create({
+  // Create Policy Permissions
+  const ticketViewPermission = await prisma.policyPermission.create({
     data: {
-      role_name: 'Account Owner',
-      role_slug: 'account_owner',
-      organizationId: organization.id,
-    },
+      permissionName : 'Ticket View Permission',
+      key: "ticket_read",
+      action: [PolicyAction.READ],
+      effect: PolicyEffect.ALLOW,
+      policyType: PolicyPermissionType.INTERNAL
+    }
   });
 
-  const adminRole = await prisma.roles.create({
+  const ticketCreatePermission = await prisma.policyPermission.create({
     data: {
-      role_name: 'Admin',
-      role_slug: 'admin',
-      organizationId: organization.id,
-    },
+      permissionName : 'Ticket Create Permission',
+      key: "ticket_create",
+      action: [PolicyAction.CREATE],
+      effect: PolicyEffect.ALLOW,
+      policyType: PolicyPermissionType.INTERNAL
+    }
   });
 
-  const managerRole = await prisma.roles.create({
+  const ticketUpdatePermission = await prisma.policyPermission.create({
     data: {
-      role_name: 'Project Manager',
-      role_slug: 'project_manager',
-      organizationId: organization.id,
-    },
+      permissionName : 'Ticket Update Permission',
+      key: "ticket_update",
+      action: [PolicyAction.UPDATE],
+      effect: PolicyEffect.ALLOW,
+      policyType: PolicyPermissionType.INTERNAL
+    }
   });
 
-  const userRole = await prisma.roles.create({
-    data: {
-      role_name: 'User',
-      role_slug: 'user',
-      organizationId: organization.id,
-    },
+  const ticketDeletePermission = await prisma.policyPermission.create({
+      data: {
+      permissionName: 'Ticket Delete Permission',
+      key: "ticket_delete",
+      action: [PolicyAction.DELETE],
+      effect: PolicyEffect.ALLOW,
+      policyType: PolicyPermissionType.INTERNAL
+    }
   });
 
-  // Create Users
+  // Create Policies
+  const ticketManagementPolicy = await prisma.policy.create({
+    data: {
+      policyName: 'Ticket Management Policy',
+      description: 'Policy for managing tickets',
+      organizationId: organization.id,
+      policyType: PolicyType.SYSTEM,
+      permissions: {
+        create: [
+          { permission: { connect: { id: ticketViewPermission.id } } },
+          { permission: { connect: { id: ticketCreatePermission.id } } },
+          { permission: { connect: { id: ticketUpdatePermission.id } } },
+          { permission: { connect: { id: ticketDeletePermission.id } } }
+        ]
+      }
+    }
+  });
+
+  const ticketViewOnlyPolicy = await prisma.policy.create({
+    data: {
+      policyName: 'Ticket View Only Policy',
+      description: 'Policy for viewing tickets only',
+      organizationId: organization.id,
+      policyType: PolicyType.CUSTOM,
+      permissions: {
+        create: [
+          { permission: { connect: { id: ticketViewPermission.id } } }
+        ]
+      }
+    }
+  });
+
+  // Create Users with Policies
   const adminUser = await prisma.user.create({
     data: {
       name: 'Alice Admin',
@@ -57,11 +121,12 @@ async function main() {
       password: 'password',
       refreshToken: 'thisisarefreshtoken',
       organizationId: organization.id,
-      userRoles: {
+      userAccess: 'GlOBAL',
+      policies: {
         create: {
-          roleId: accountOwnerRole.id,
-        },
-      },
+          policyId: ticketManagementPolicy.id
+        }
+      }
     },
   });
 
@@ -72,11 +137,12 @@ async function main() {
       password: 'password',
       refreshToken: 'thisisarefreshtokedssn',
       organizationId: organization.id,
-      userRoles: {
+      userAccess: 'GROUPS',
+      policies: {
         create: {
-          roleId: managerRole.id,
-        },
-      },
+          policyId: ticketManagementPolicy.id
+        }
+      }
     },
   });
 
@@ -87,11 +153,12 @@ async function main() {
       password: 'password',
       refreshToken: 'thisisarjsdefreshtoken',
       organizationId: organization.id,
-      userRoles: {
+      userAccess: 'ASSIGNED',
+      policies: {
         create: {
-          roleId: userRole.id,
-        },
-      },
+          policyId: ticketViewOnlyPolicy.id
+        }
+      }
     },
   });
 

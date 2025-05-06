@@ -1,9 +1,24 @@
-export const ACCESS = {
-    PUBLIC: 'public',
-    PRIVATE: 'private',
-    PROTECTED: 'protected',
-    ADMIN: 'admin',
-    SUPER_ADMIN: 'super_admin',
-    USER: 'user',
-    GUEST: 'guest',
-}
+export const POLICY_PERMISSION_KEYS : string[] = [
+  'all',
+  'ticket_create',
+  'ticket_read',
+  'ticket_update',
+  'ticket_delete',
+  'ticket_assign',
+  'ticket_comment',
+  'ticket_forms',
+  'ticket_fields',
+  'ticket_statuses',
+  'ticket_priorities',
+  'ticket_categories',
+  'ticket_sub_categories',
+  'ticket_close',
+  'ticket_reopen',
+  'ticket_assign_group',
+  'ticket_escalation',
+  'ticket_attachments',
+  'ticket_comments',
+  'reports',
+  'user_management',
+  'billings'
+];

@@ -9,7 +9,7 @@ export const generateTokens = (userId: string) => {
   const accessToken = jwt.sign(
     { id: userId },
     JWT_SECRET,
-    { expiresIn: '15m' } // Access token expires in 15 minutes
+    { expiresIn: '1d' } // Access token expires in 1 day
   );
 
   const refreshToken = jwt.sign(
