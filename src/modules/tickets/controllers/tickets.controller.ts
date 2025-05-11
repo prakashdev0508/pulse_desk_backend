@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { createError, createSuccess } from '../../../utils/messageResponse';
 import { logger } from '../../../config/logger';
-import { createTicketSchema } from '../../../schema/tickets.schema';
+import { createTicketSchema } from '../../../schema/tickets/tickets.schema';
 import { z } from 'zod';
 import { createTicketService } from '../../../services/tickets/ticket.services';
 

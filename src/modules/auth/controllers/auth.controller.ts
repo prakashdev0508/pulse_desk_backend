@@ -8,7 +8,7 @@ import {
   organizationRegisterSchema,
   userRegisterSchema,
   userLoginSchema,
-} from '../../../schema/authschema';
+} from '../../../schema/auth/authschema';
 import { organisationSlugcheck } from '../../../services/organisation.service';
 import { logger } from '../../../config/logger';
 import { generateTokens, saveRefreshToken } from '../../../services/token.service';
@@ -57,11 +57,6 @@ export const organizationRegister = async (
         },
       });
 
-      const accountRole = await prisma.roles.findUnique({
-        where: {
-          role_slug: 'account_owner',
-        },
-      });
 
       const user = await prisma.user.create({
         data: {
@@ -69,11 +64,6 @@ export const organizationRegister = async (
           email,
           password: hashedPassword,
           organizationId: organization.id,
-          userRoles: {
-            create: {
-              roleId: accountRole?.id as string,
-            },
-          },
         },
       });
 
@@ -101,7 +91,7 @@ export const organizationRegister = async (
         { id: user.id },
         process.env.JWT_SECRET as string,
         {
-          expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+          expiresIn: process.env.JWT_EXPIRES_IN || '1d',
         } as jwt.SignOptions
       );
 

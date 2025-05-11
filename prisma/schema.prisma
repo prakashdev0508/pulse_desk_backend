@@ -2,6 +2,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -10,25 +11,26 @@ datasource db {
 }
 
 model Organization {
-  id                   String                @id @default(cuid())
-  name                 String
-  slug                 String                @unique
-  address              String?
-  phone                String?
-  email                String?
-  users                User[]
-  projects             Project[]
-  tickets              Ticket[]
-  tasks                Task[]
-  ticketCustomers      TicketCustomer[]
-  ticketGroups         TicketGroup[]
-  ticketCategories     TicketCategories[]
-  ticketStatuses       TicketStatuses[]
-  ticketsSubCategories TicketSubCategories[]
-  ticketsAutomations   TicketsAutomations[]
+  id                    String                  @id @default(cuid())
+  name                  String
+  slug                  String                  @unique
+  address               String?
+  phone                 String?
+  email                 String?
+  users                 User[]
+  projects              Project[]
+  tickets               Ticket[]
+  tasks                 Task[]
+  ticketCustomers       TicketCustomer[]
+  ticketGroups          TicketGroup[]
+  ticketCategories      TicketCategories[]
+  ticketStatuses        TicketStatuses[]
+  ticketsSubCategories  TicketSubCategories[]
+  ticketsAutomations    TicketsAutomations[]
   ticketEscalationRules TicketEscalationRules[]
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  roles                 Roles[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 }
 
 model User {
@@ -66,65 +68,66 @@ model TicketCustomer {
 }
 
 model Ticket {
-  id             String          @id @default(cuid())
-  title          String
-  description    String?
-  priority       TicketPriority  @default(MEDIUM)
-  responseTime   DateTime?
-  resolutionTime DateTime?
-  categoryId     String
-  category       TicketCategories @relation(fields: [categoryId], references: [id])
-  subCategoryId  String?
-  subCategory    TicketSubCategories? @relation(fields: [subCategoryId], references: [id])
-  customerId     String
-  customer       TicketCustomer @relation(fields: [customerId], references: [id])
-  statusID       String
-  status         TicketStatuses  @relation(fields: [statusID], references: [id])
-  organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id])
-  customFields   Json?
-  automationRuleId   String?
-  automationRule     TicketsAutomations? @relation(fields: [automationRuleId], references: [id])
-  escalationRuleId   String?
-  escalationRule     TicketEscalationRules? @relation(fields: [escalationRuleId], references: [id])
-  assignedgroupId   String?
-  assignedGroup     TicketGroup? @relation("TicketAssignedTo", fields: [assignedgroupId], references: [id])
-  assignedToId      String?
-  assignedTo        User?        @relation("UserAssignedTickets", fields: [assignedToId], references: [id])
-  comments       TicketComments[]
-  attachments    TicketAttachments[]
-  escalations    TicketEscalations[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               String                 @id @default(cuid())
+  title            String
+  description      String?
+  priority         TicketPriority         @default(MEDIUM)
+  responseTime     DateTime?
+  resolutionTime   DateTime?
+  categoryId       String
+  category         TicketCategories       @relation(fields: [categoryId], references: [id])
+  subCategoryId    String?
+  subCategory      TicketSubCategories?   @relation(fields: [subCategoryId], references: [id])
+  customerId       String
+  customer         TicketCustomer         @relation(fields: [customerId], references: [id])
+  statusID         String
+  status           TicketStatuses         @relation(fields: [statusID], references: [id])
+  organizationId   String
+  organization     Organization           @relation(fields: [organizationId], references: [id])
+  customFields     Json?
+  automationRuleId String?
+  automationRule   TicketsAutomations?    @relation(fields: [automationRuleId], references: [id])
+  escalationRuleId String?
+  escalationRule   TicketEscalationRules? @relation(fields: [escalationRuleId], references: [id])
+  assignedgroupId  String?
+  assignedGroup    TicketGroup?           @relation("TicketAssignedTo", fields: [assignedgroupId], references: [id])
+  assignedToId     String?
+  assignedTo       User?                  @relation("UserAssignedTickets", fields: [assignedToId], references: [id])
+  comments         TicketComments[]
+  attachments      TicketAttachments[]
+  escalations      TicketEscalations[]
+  ticketHistory    Json?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 }
 
 model TicketAttachments {
-  id String @id @default(cuid())
-  ticketId String
-  ticket Ticket @relation(fields: [ticketId], references: [id])
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model TicketComments {
-  id String @id @default(cuid())
-  ticketId String
-  ticket Ticket @relation(fields: [ticketId], references: [id])
-  comment String
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  comment   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model TicketGroup {
-  id             String       @id @default(cuid())
-  name           String
-  description    String?
-  organizationId String
-  assignedUsers  User[]       @relation("UserTicketGroups")
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  assignedTickets Ticket[]    @relation("TicketAssignedTo")
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id              String       @id @default(cuid())
+  name            String
+  description     String?
+  organizationId  String
+  assignedUsers   User[]       @relation("UserTicketGroups")
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  assignedTickets Ticket[]     @relation("TicketAssignedTo")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 }
 
 model TicketsAutomations {
@@ -134,21 +137,21 @@ model TicketsAutomations {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   tickets        Ticket[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
 
 model TicketCategories {
-  id                  String                @id @default(cuid())
+  id                  String                  @id @default(cuid())
   name                String
   description         String?
   organizationId      String
-  organization        Organization          @relation(fields: [organizationId], references: [id])
+  organization        Organization            @relation(fields: [organizationId], references: [id])
   ticketSubCategories TicketSubCategories[]
   tickets             Ticket[]
   escalationRules     TicketEscalationRules[]
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
 }
 
 model TicketSubCategories {
@@ -191,18 +194,71 @@ model PricingPlan {
   updatedAt DateTime @updatedAt
 }
 
-model Roles {
-  id             String        @id @default(cuid())
-  organizationId String
-  role_name      String
-  role_slug      UserRoleSlug? @unique
-  is_active      Boolean       @default(true)
-  is_deleted     Boolean       @default(false)
+enum ROLE_TYPE {
+  default
+  custom
+}
 
-  users UserRoles[]
+model Roles {
+  id             String    @id @default(cuid())
+  organizationId String?
+  role_name      String
+  role_slug      String    @unique
+  description    String?
+  is_active      Boolean   @default(true)
+  is_deleted     Boolean   @default(false)
+  role_type      ROLE_TYPE @default(default)
+
+  users        UserRoles[]
+  permissions  RolePermissionsToRoles[]
+  organization Organization?             @relation(fields: [organizationId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum ModuleSlug {
+  saas
+  auth
+  ticket
+  tasks
+}
+
+enum SubModuleSlug {
+  list
+  reports
+  admin
+  settings
+}
+
+enum PermissionSlug {
+  can_create
+  can_read
+  can_update
+  can_delete
+  can_approve
+}
+
+model RolePermissions {
+  id              String                   @id @default(cuid())
+  permission      String
+  description     String?
+  module_slug     ModuleSlug
+  sub_module_slug SubModuleSlug
+  permission_slug PermissionSlug
+  roles           RolePermissionsToRoles[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RolePermissionsToRoles {
+  roleId       String
+  permissionId String
+  role         Roles           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   RolePermissions @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
 }
 
 model UserRoles {
@@ -252,33 +308,33 @@ model TaskComment {
 }
 
 model TicketEscalationRules {
-  id             String       @id @default(cuid())
-  name           String
-  description    String?
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  categoryId     String
-  category       TicketCategories @relation(fields: [categoryId], references: [id])
-  priority       TicketPriority
-  responseTime   Int          // in minutes
-  resolutionTime Int          // in minutes
-  escalationLevels Json      // Array of escalation levels with time thresholds
-  tickets        Ticket[]
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id               String           @id @default(cuid())
+  name             String
+  description      String?
+  organizationId   String
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  categoryId       String
+  category         TicketCategories @relation(fields: [categoryId], references: [id])
+  priority         TicketPriority
+  responseTime     Int // in minutes
+  resolutionTime   Int // in minutes
+  escalationLevels Json // Array of escalation levels with time thresholds
+  tickets          Ticket[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }
 
 model TicketEscalations {
-  id             String       @id @default(cuid())
-  ticketId       String
-  ticket         Ticket       @relation(fields: [ticketId], references: [id])
-  level          Int
-  escalatedTo    String       // User or group ID
-  escalatedAt    DateTime     @default(now())
-  resolvedAt     DateTime?
-  notes          String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id          String    @id @default(cuid())
+  ticketId    String
+  ticket      Ticket    @relation(fields: [ticketId], references: [id])
+  level       Int
+  escalatedTo String // User or group ID
+  escalatedAt DateTime  @default(now())
+  resolvedAt  DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 enum UserRoleSlug {

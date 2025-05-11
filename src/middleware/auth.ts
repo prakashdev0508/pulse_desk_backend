@@ -36,9 +36,9 @@ export const verifyToken = async (
       return next(createError(401, 'User is deleted'));
     }
 
-    if (!user.is_Verified) {
-      return next(createError(401, 'User is not verified'));
-    }
+    // if (!user.is_Verified) {
+    //   return next(createError(401, 'User is not verified'));
+    // }
 
     const roleSlugs = await prisma.userRoles.findMany({
       where: {
