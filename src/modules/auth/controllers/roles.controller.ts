@@ -214,3 +214,85 @@ export const createRole = async (req: Request, res: Response, next: NextFunction
   try {
   } catch (error) {}
 };
+
+/**
+ * @desc    get all roles
+ * @route   GET /api/v1/auth/roles
+ * @access  Private
+ */
+
+export const getAllRoles = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const roles = await prisma.roles.findMany();
+
+    createSuccess(res, 'All roles fetched successfully', {
+      roles,
+    });
+  } catch (error) {
+    logger.error('All roles fetching error:', error);
+    if (error instanceof z.ZodError) {
+      next(createError(400, 'Validation error', error));
+    } else {
+      next(createError(500, 'Internal server error'));
+    }
+  }
+};
+
+/**
+ * @desc    assign role to user
+ * @route   POST /api/v1/auth/roles/assign
+ * @access  Private
+ */
+
+export const assignRoleToUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { user_id, role_ids } = req.body;
+
+    if (!user_id || !Array.isArray(role_ids) || role_ids.length === 0) {
+      return next(createError(400, 'user_id and at least one role ID are required'));
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: user_id },
+      });
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Verify all roles exist
+      const roles = await tx.roles.findMany({
+        where: { id: { in: role_ids } },
+      });
+
+      if (roles.length !== role_ids.length) {
+        throw new Error('One or more roles not found');
+      }
+
+      // Delete existing role assignments
+      await tx.userRoles.deleteMany({
+        where: { userId: user_id },
+      });
+
+      // Create new role assignments
+      await tx.userRoles.createMany({
+        data: role_ids.map((roleId) => ({
+          userId: user_id,
+          roleId,
+        })),
+      });
+    });
+
+    createSuccess(res, 'Roles assigned to user successfully');
+  } catch (error) {
+    logger.error('Error assigning roles to user:', error);
+    if (error instanceof z.ZodError) {
+      next(createError(400, 'Validation error', error));
+    } else if (error instanceof Error) {
+      next(createError(404, error.message));
+    } else {
+      next(createError(500, 'Error assigning roles to user'));
+    }
+  }
+};

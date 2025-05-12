@@ -28,6 +28,8 @@ model Organization {
   ticketsSubCategories  TicketSubCategories[]
   ticketsAutomations    TicketsAutomations[]
   ticketEscalationRules TicketEscalationRules[]
+  ticketSubscription    Boolean @default(false)
+  taskSubscription      Boolean @default(false)
   roles                 Roles[]
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
@@ -46,6 +48,8 @@ model User {
 
   userRoles    UserRoles[]
   refreshToken String?     @unique
+  ticketScope  Scope       @default(null)
+  taskScope    Scope       @default(null)
 
   isActive    Boolean   @default(true)
   lastLogin   DateTime?
@@ -117,7 +121,6 @@ model TicketComments {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
 model TicketGroup {
   id              String       @id @default(cuid())
   name            String
@@ -359,6 +362,13 @@ enum TicketPriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+enum Scope {
+  null
+  global
+  group
+  assigned
 }
 
 enum TicketStatus {

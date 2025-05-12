@@ -1,16 +1,17 @@
+import { Request, Response, NextFunction } from 'express';
+import { prisma } from '../config/db/dbconfig';
+import { createError } from '../utils/messageResponse';
+import {
+  generateTokens,
+  removeRefreshToken,
+  saveRefreshToken,
+  verifyAccessToken,
+  verifyRefreshToken,
+} from '../services/token.service';
 
-import { Request, Response, NextFunction } from "express";
-import { prisma } from "../config/db/dbconfig";
-import { createError } from "../utils/messageResponse";
-import { generateTokens, removeRefreshToken, saveRefreshToken, verifyAccessToken, verifyRefreshToken } from '../services/token.service';
+const JWT_SECRET = process.env.JWT_SECRET || 'your_secret_key';
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
-
-export const verifyToken = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -22,6 +23,19 @@ export const verifyToken = async (
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
+      select: {
+        id: true,
+        isActive: true,
+        is_deleted: true,
+        organizationId: true,
+        name: true,
+        organization: {
+          select: {
+            ticketSubscription: true,
+            taskSubscription: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -50,8 +64,12 @@ export const verifyToken = async (
     res.locals.roles = roleSlugs;
     res.locals.organizationId = user.organizationId;
     res.locals.userName = user.name;
+    res.locals.subscriptions = {
+      ticket: user.organization.ticketSubscription,
+      task: user.organization.taskSubscription,
+    };
     next();
-  } catch (error:any) {
+  } catch (error: any) {
     if (error.name === 'TokenExpiredError') {
       return next(createError(401, 'Token expired'));
     }
@@ -68,9 +86,7 @@ export const verifyroles = (accessRole: string[]) => {
         return next(createError(403, 'No roles found for user'));
       }
 
-      const hasAccess = userRoles.some((role: string) =>
-        accessRole.includes(role)
-      );
+      const hasAccess = userRoles.some((role: string) => accessRole.includes(role));
 
       if (!hasAccess) {
         return next(createError(403, 'Unauthorized: Access forbidden'));
@@ -84,11 +100,7 @@ export const verifyroles = (accessRole: string[]) => {
   };
 };
 
-export const refreshAccessToken = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const refreshAccessToken = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) {
@@ -116,11 +128,7 @@ export const refreshAccessToken = async (
   }
 };
 
-export const logout = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = res.locals.userId;
     await removeRefreshToken(userId);
@@ -130,10 +138,6 @@ export const logout = async (
   }
 };
 
-export const companyPricingAndAcces = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const companyPricingAndAcces = async (req: Request, res: Response, next: NextFunction) => {
   next();
 };

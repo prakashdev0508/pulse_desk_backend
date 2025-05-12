@@ -10,6 +10,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { logger, stream } from './config/logger';
 import authRoute from './modules/auth/routes/auth.routes';
 import healthRoutes from './routes/health.routes';
+import './config/redis'; // Import redis config
 
 // Load environment variables
 config();

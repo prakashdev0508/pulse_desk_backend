@@ -12,6 +12,7 @@ import {
 import { organisationSlugcheck } from '../../../services/organisation.service';
 import { logger } from '../../../config/logger';
 import { generateTokens, saveRefreshToken } from '../../../services/token.service';
+import { redis } from '../../../config/redis';
 
 /**
  * @desc    post organization registration
@@ -25,8 +26,16 @@ export const organizationRegister = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { organizationName, organisationAddress, password, slug, phoneNumber, email } =
-      organizationRegisterSchema.parse(req.body);
+    const {
+      organizationName,
+      organisationAddress,
+      password,
+      slug,
+      phoneNumber,
+      email,
+      ticket_subscription,
+      task_subscription,
+    } = organizationRegisterSchema.parse(req.body);
 
     const slugCheck = await organisationSlugcheck(slug);
 
@@ -54,9 +63,10 @@ export const organizationRegister = async (
           address: organisationAddress,
           email,
           phone: phoneNumber,
+          ticketSubscription: ticket_subscription,
+          taskSubscription: task_subscription,
         },
       });
-
 
       const user = await prisma.user.create({
         data: {
@@ -169,11 +179,22 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
             role: {
               select: {
                 role_slug: true,
-              },
-            },
-          },
-        },
-      },
+                permissions: {
+                  select: {
+                    permission: {
+                      select: {
+                        module_slug: true,
+                        sub_module_slug: true,
+                        permission_slug: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     });
 
     if (!user) {
@@ -192,16 +213,31 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
 
     await saveRefreshToken(user.id, refreshToken);
 
+    // Extract roles and permissions
+    const roles = user.userRoles.map(ur => ur.role.role_slug);
+    const permissions = user.userRoles.flatMap(ur => 
+      ur.role.permissions.map(rp => ({
+        module: rp.permission.module_slug,
+        submodule: rp.permission.sub_module_slug,
+        permission: rp.permission.permission_slug
+      }))
+    );
+
+    // Cache user roles and permissions
+    const userCacheKey = `user:${user.id}:permissions`;
+    await redis.setex(userCacheKey, 3600, JSON.stringify({ roles, permissions })); // Cache for 1 hour
+
     const userData = {
       id: user.id,
-      roles: user.userRoles.map((role) => role.role.role_slug),
+      roles,
+      permissions
     };
 
     createSuccess(
       res,
       'User logged in successfully',
       {
-        user : userData,
+        user: userData,
         accessToken,
         refreshToken,
       },
@@ -221,7 +257,7 @@ export const userLogin = async (req: Request, res: Response, next: NextFunction)
  * @desc    get user details
  * @route   GET /api/v1/auth/user/me
  * @access  Private
- */
+*/
 export const me = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = res.locals.userId;
@@ -243,6 +279,14 @@ export const me = async (req: Request, res: Response, next: NextFunction) => {
     });
 
     createSuccess(res, 'User details', user, 200);
+  } catch (error) {
+    next(createError(500, 'Internal server error'));
+  }
+};
+
+export const checkAuthorization = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    createSuccess(res, 'You have access to this resource', null, 200);
   } catch (error) {
     next(createError(500, 'Internal server error'));
   }

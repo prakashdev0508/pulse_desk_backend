@@ -19,11 +19,13 @@ export const organizationRegisterSchema = z.object({
   organisationAddress: z.string().optional(),
   email: z.string().email({ message: "Invalid email address" }),
   phoneNumber: z.string().optional(),
-  slug : z.string({message : "Slug is required"}),
+  slug: z.string({ message: "Slug is required" }),
+  ticket_subscription: z.boolean().default(false),
+  task_subscription: z.boolean().default(false),
   password: z
     .string()
     .min(6, { message: "Password must be at least 6 characters long" }),
-} );
+});
 
 export const userLoginSchema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
